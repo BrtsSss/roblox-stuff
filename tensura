@@ -199,7 +199,8 @@ local skipEnabled = createToggle("Auto Skip Turn", 210)
 
 local raidSelection = createDropdown("Select Raid", {
     "Direwolf Pack Attack",
-    "Kingdom of Falmuth Battle"
+    "Kingdom of Falmuth Battle",
+    "Charybdis Descent"
 }, 250)
 
 --// AUTO COMBAT
