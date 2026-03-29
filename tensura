@@ -227,7 +227,7 @@ task.spawn(function()
                 prestigeRemote:InvokeServer()
             end)
         end
-        task.wait(1)
+        task.wait()
     end
 end)
 
@@ -251,7 +251,7 @@ task.spawn(function()
                 evolveRemote:FireServer()
             end)
         end
-        task.wait(1)
+        task.wait()
     end
 end)
 
