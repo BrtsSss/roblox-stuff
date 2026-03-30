@@ -23,7 +23,7 @@ frame.Position = UDim2.new(0, 20, 0, 100)
 frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50) -- panel color
 frame.BorderSizePixel = 0
 frame.Active = true
-frame.ClipsDescendants = true
+frame.ClipsDescendants = false
 frame.Name = "AutoGUI"
 
 -- Rounded corners
@@ -154,30 +154,40 @@ local function createDropdown(name, options, yPos)
     local selected = options[1]
     local open = false
 
-    local listFrame = Instance.new("Frame")
-    listFrame.Parent = frame
-    listFrame.Size = UDim2.new(0, 240, 0, #options * 25)
-    listFrame.Position = UDim2.new(0, 20, 0, yPos + 30)
+    -- Container frame to bypass clipping issues
+    local container = Instance.new("Frame")
+    container.Parent = frame
+    container.Size = UDim2.new(0, 240, 0, math.min(#options * 25, 150))
+    container.Position = UDim2.new(0, 20, 0, yPos + 30)
+    container.BackgroundTransparency = 1
+    container.ClipsDescendants = false -- allow scrolling frame to show
+
+    local listFrame = Instance.new("ScrollingFrame")
+    listFrame.Parent = container
+    listFrame.Size = UDim2.new(1, 0, 1, 0)
+    listFrame.Position = UDim2.new(0, 0, 0, 0)
     listFrame.BackgroundColor3 = guiColor
+    listFrame.CanvasSize = UDim2.new(0, 0, 0, #options * 25)
+    listFrame.ScrollBarThickness = 6
     listFrame.Visible = false
 
-    local corner = Instance.new("UICorner", listFrame)
-    corner.CornerRadius = UDim.new(0, 6)
+    local uiListLayout = Instance.new("UIListLayout")
+    uiListLayout.Parent = listFrame
+    uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
     for i, option in ipairs(options) do
-        local btn = Instance.new("TextButton")
-        btn.Parent = listFrame
-        btn.Size = UDim2.new(1, 0, 0, 25)
-        btn.Position = UDim2.new(0, 0, 0, (i-1)*25)
-        btn.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
-        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        btn.Font = Enum.Font.SourceSans
-        btn.TextSize = 14
-        btn.Text = option
+        local optBtn = Instance.new("TextButton")
+        optBtn.Parent = listFrame
+        optBtn.Size = UDim2.new(1, 0, 0, 25)
+        optBtn.Text = option
+        optBtn.BackgroundColor3 = guiColor
+        optBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        optBtn.Font = Enum.Font.SourceSans
+        optBtn.TextSize = 14
 
-        btn.MouseButton1Click:Connect(function()
+        optBtn.MouseButton1Click:Connect(function()
             selected = option
-            dropdown.Text = name .. ": " .. option
+            dropdown.Text = name .. ": " .. selected
             listFrame.Visible = false
             open = false
         end)
@@ -276,37 +286,6 @@ sliderContainer.Parent = frame
 sliderContainer.Size = UDim2.new(0, 200, 0, 30)
 sliderContainer.Position = UDim2.new(0, 20, 1, -40)
 sliderContainer.BackgroundTransparency = 1
-
--- Label
-local sliderLabel = Instance.new("TextLabel")
-sliderLabel.Parent = sliderContainer
-sliderLabel.Size = UDim2.new(0.5, 0, 1, 0)
-sliderLabel.Position = UDim2.new(0,0,0,0)
-sliderLabel.BackgroundTransparency = 1
-sliderLabel.Text = "Cycle Speed:"
-sliderLabel.TextColor3 = Color3.fromRGB(255,255,255)
-sliderLabel.Font = Enum.Font.SourceSans
-sliderLabel.TextSize = 16
-sliderLabel.TextXAlignment = Enum.TextXAlignment.Left
-
--- Slider bar
-local sliderBar = Instance.new("Frame")
-sliderBar.Parent = sliderContainer
-sliderBar.Size = UDim2.new(0.5, -10, 0.4, 0)
-sliderBar.Position = UDim2.new(0.5, 10, 0.3, 0)
-sliderBar.BackgroundColor3 = Color3.fromRGB(70,70,70)
-sliderBar.BorderSizePixel = 0
-local sliderCorner = Instance.new("UICorner", sliderBar)
-sliderCorner.CornerRadius = UDim.new(0, 6)
-
--- Slider handle
-local handle = Instance.new("Frame")
-handle.Parent = sliderBar
-handle.Size = UDim2.new(0, 12, 1, 0)
-handle.Position = UDim2.new(0.5, -6, 0, 0)
-handle.BackgroundColor3 = Color3.fromRGB(255,255,255)
-local handleCorner = Instance.new("UICorner", handle)
-handleCorner.CornerRadius = UDim.new(0, 6)
 
 -- Variables
 local dragging = false
