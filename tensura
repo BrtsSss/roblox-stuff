@@ -203,7 +203,7 @@ local raidSelection = createDropdown("Select Raid", {
     "Direwolf Pack Attack",
     "Kingdom of Falmuth Battle",
     "Charybdis Descent"
-}, 250)
+}, 290)
 
 --// AUTO COMBAT
 local skillOrder = {8,7,6,5,4,3,2,1}
