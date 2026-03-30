@@ -202,7 +202,8 @@ local dungeonEnabled = createToggle("Auto Dungeon", 250)
 local raidSelection = createDropdown("Select Raid", {
     "Direwolf Pack Attack",
     "Kingdom of Falmuth Battle",
-    "Charybdis Descent"
+    "Charybdis Descent",
+    "Hinata Sakaguchi Encounter"
 }, 290)
 
 --// AUTO COMBAT
