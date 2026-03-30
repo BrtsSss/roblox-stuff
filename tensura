@@ -9,6 +9,7 @@ local prestigeRemote = ReplicatedStorage.Remotes:WaitForChild("prestiged")
 local raidRemote = ReplicatedStorage.Remotes:WaitForChild("startRaid")
 local evolveRemote = ReplicatedStorage.Remotes:WaitForChild("evolve")
 local skipRemote = combatRemote
+local dungeonRemote = ReplicatedStorage.Remotes:WaitForChild("enterDungeon")
 
 --// GUI SETUP
 local gui = Instance.new("ScreenGui")
@@ -196,6 +197,7 @@ local prestigeEnabled = createToggle("Auto Prestige", 90)
 local raidEnabled = createToggle("Auto Raid", 130)
 local evolveEnabled = createToggle("Auto Evolve", 170)
 local skipEnabled = createToggle("Auto Skip Turn", 210)
+local dungeonEnabled = createToggle("Auto Dungeon", 250)
 
 local raidSelection = createDropdown("Select Raid", {
     "Direwolf Pack Attack",
@@ -240,6 +242,18 @@ task.spawn(function()
             end)
         end
         task.wait(5)
+    end
+end)
+
+--// AUTO Dungeon
+task.spawn(function()
+    while true do
+        if dungeonEnabled() then
+            pcall(function()
+                dungeonRemote:InvokeServer()
+            end)
+        end
+        task.wait(3)
     end
 end)
 
