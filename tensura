@@ -213,7 +213,8 @@ local raidSelection = createDropdown("Select Raid", {
     "Direwolf Pack Attack",
     "Kingdom of Falmuth Battle",
     "Charybdis Descent",
-    "Hinata Sakaguchi Encounter"
+    "Hinata Sakaguchi Encounter",
+    "Scorch Dragon Velgrynd"
 }, 290)
 
 --// AUTO COMBAT
