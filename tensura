@@ -140,6 +140,150 @@ local function createToggle(name, yPos)
     return function() return enabled end
 end
 
+--// SERVICES
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local LocalPlayer = Players.LocalPlayer
+
+--// REMOTES
+local combatRemote = ReplicatedStorage.Remotes:WaitForChild("awaitCombat")
+local prestigeRemote = ReplicatedStorage.Remotes:WaitForChild("prestiged")
+local raidRemote = ReplicatedStorage.Remotes:WaitForChild("startRaid")
+local evolveRemote = ReplicatedStorage.Remotes:WaitForChild("evolve")
+local skipRemote = combatRemote
+local dungeonRemote = ReplicatedStorage.Remotes:WaitForChild("enterDungeon")
+
+--// GUI SETUP
+local gui = Instance.new("ScreenGui")
+gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+gui.ResetOnSpawn = false
+
+local frame = Instance.new("Frame")
+frame.Parent = gui
+frame.Size = UDim2.new(0, 280, 0, 380)
+frame.Position = UDim2.new(0, 20, 0, 100)
+frame.BackgroundColor3 = Color3.fromRGB(50, 50, 50) -- panel color
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.ClipsDescendants = false
+frame.Name = "AutoGUI"
+
+-- Rounded corners
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 12)
+corner.Parent = frame
+
+-- Gradient background
+local gradient = Instance.new("UIGradient")
+gradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(70, 70, 70)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 40, 40))
+}
+gradient.Rotation = 45
+gradient.Parent = frame
+
+--// Top bar for dragging
+local topBar = Instance.new("Frame")
+topBar.Parent = frame
+topBar.Size = UDim2.new(1, 0, 0, 30) -- only 30px tall
+topBar.Position = UDim2.new(0, 0, 0, 0)
+topBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+topBar.BorderSizePixel = 0
+topBar.Name = "TopBar"
+
+--// Dragging logic
+local UIS = game:GetService("UserInputService")
+local dragging = false
+local dragStart
+local startPos
+
+topBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+topBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UIS.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+-- Rounded corners
+local uiCorner = Instance.new("UICorner", frame)
+uiCorner.CornerRadius = UDim.new(0, 10)
+
+-- Gradient background for the panel
+local frameGradient = Instance.new("UIGradient")
+frameGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 45, 45)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(70, 70, 70))
+}
+frameGradient.Rotation = 90
+frameGradient.Parent = frame
+
+-- Title
+local title = Instance.new("TextLabel")
+title.Parent = frame
+title.Size = UDim2.new(1, 0, 0, 40)
+title.Position = UDim2.new(0, 0, 0, 0)
+title.BackgroundTransparency = 1  -- keep text label transparent
+title.Text = "Automation Panel"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 22
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextStrokeTransparency = 0.7
+title.TextXAlignment = Enum.TextXAlignment.Center
+title.TextYAlignment = Enum.TextYAlignment.Center
+
+--// COLOR PICKER
+local guiColor = Color3.fromRGB(50,50,50) -- default, change with picker later
+
+local function setGUIColor(color)
+    guiColor = color
+    frame.BackgroundColor3 = guiColor
+end
+
+--// HELPER FUNCTIONS
+local function createToggle(name, yPos)
+    local toggle = Instance.new("TextButton")
+    toggle.Parent = frame
+    toggle.Size = UDim2.new(0, 240, 0, 30)
+    toggle.Position = UDim2.new(0, 20, 0, yPos)
+    toggle.BackgroundColor3 = Color3.fromRGB(150, 50, 50) -- red = OFF
+    toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggle.Font = Enum.Font.SourceSans
+    toggle.TextSize = 16
+    toggle.Text = name .. ": OFF"
+    local enabled = false
+
+    toggle.MouseButton1Click:Connect(function()
+        enabled = not enabled
+        toggle.Text = name .. (enabled and ": ON" or ": OFF")
+        toggle.BackgroundColor3 = enabled and Color3.fromRGB(50, 150, 50) or Color3.fromRGB(150, 50, 50)
+    end)
+    return function() return enabled end
+end
+
+local openDropdowns = {} -- put this ABOVE the function (only once)
+
 local function createDropdown(name, options, yPos)
     local dropdown = Instance.new("TextButton")
     dropdown.Parent = frame
@@ -150,32 +294,35 @@ local function createDropdown(name, options, yPos)
     dropdown.Font = Enum.Font.SourceSans
     dropdown.TextSize = 16
     dropdown.Text = name .. ": " .. options[1]
+    dropdown.ZIndex = 2
 
     local selected = options[1]
     local open = false
 
-    -- Container frame to bypass clipping issues
+    -- Container
     local container = Instance.new("Frame")
     container.Parent = frame
     container.Size = UDim2.new(0, 240, 0, math.min(#options * 25, 150))
     container.Position = UDim2.new(0, 20, 0, yPos + 30)
     container.BackgroundTransparency = 1
-    container.ClipsDescendants = false -- allow scrolling frame to show
+    container.ClipsDescendants = false
 
     local listFrame = Instance.new("ScrollingFrame")
     listFrame.Parent = container
     listFrame.Size = UDim2.new(1, 0, 1, 0)
-    listFrame.Position = UDim2.new(0, 0, 0, 0)
     listFrame.BackgroundColor3 = guiColor
     listFrame.CanvasSize = UDim2.new(0, 0, 0, #options * 25)
     listFrame.ScrollBarThickness = 6
     listFrame.Visible = false
+    listFrame.ZIndex = 3
+
+    -- register dropdown
+    table.insert(openDropdowns, listFrame)
 
     local uiListLayout = Instance.new("UIListLayout")
     uiListLayout.Parent = listFrame
-    uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
-    for i, option in ipairs(options) do
+    for _, option in ipairs(options) do
         local optBtn = Instance.new("TextButton")
         optBtn.Parent = listFrame
         optBtn.Size = UDim2.new(1, 0, 0, 25)
@@ -184,6 +331,7 @@ local function createDropdown(name, options, yPos)
         optBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
         optBtn.Font = Enum.Font.SourceSans
         optBtn.TextSize = 14
+        optBtn.ZIndex = 4
 
         optBtn.MouseButton1Click:Connect(function()
             selected = option
@@ -195,7 +343,25 @@ local function createDropdown(name, options, yPos)
 
     dropdown.MouseButton1Click:Connect(function()
         open = not open
+
+        -- close all other dropdowns
+        for _, v in ipairs(openDropdowns) do
+            v.Visible = false
+        end
+
         listFrame.Visible = open
+
+        if open then
+            -- bring to front
+            dropdown.ZIndex = 99
+            listFrame.ZIndex = 100
+
+            for _, child in ipairs(listFrame:GetChildren()) do
+                if child:IsA("TextButton") then
+                    child.ZIndex = 101
+                end
+            end
+        end
     end)
 
     return function() return selected end
@@ -208,6 +374,7 @@ local raidEnabled = createToggle("Auto Raid", 130)
 local evolveEnabled = createToggle("Auto Evolve", 170)
 local skipEnabled = createToggle("Auto Skip Turn", 210)
 local dungeonEnabled = createToggle("Auto Dungeon", 250)
+local modeToggle = createToggle("Use Single Skill", 290)
 
 local raidSelection = createDropdown("Select Raid", {
     "Direwolf Pack Attack",
@@ -215,21 +382,32 @@ local raidSelection = createDropdown("Select Raid", {
     "Charybdis Descent",
     "Hinata Sakaguchi Encounter",
     "Scorch Dragon Velgrynd"
-}, 290)
+}, 320)
 
 --// AUTO COMBAT
+local useMode = "cycle" -- "cycle" or "single"
+local selectedSkill = 1 -- used if mode = "single"
+
 local skillOrder = {8,7,6,5,4,3,2,1}
 local index = 1
 
 combatRemote.OnClientInvoke = function(...)
     if combatEnabled() then
-        local skill = skillOrder[index]
-        index += 1
-        if index > #skillOrder then index = 1 end
-        return skill
+        
+        if useMode == "cycle" then
+            local skill = skillOrder[index]
+            index += 1
+            if index > #skillOrder then index = 1 end
+            return skill
+
+        elseif useMode == "single" then
+            return selectedSkill
+        end
+
     elseif skipEnabled() then
         return "skipturn"
     end
+
     return "skipturn"
 end
 
@@ -257,6 +435,18 @@ task.spawn(function()
     end
 end)
 
+--//Mode toggle
+task.spawn(function()
+    while true do
+        if modeToggle() then
+            useMode = "single"
+        else
+            useMode = "cycle"
+        end
+        task.wait(0.1)
+    end
+end)
+
 --// AUTO Dungeon
 task.spawn(function()
     while true do
@@ -278,6 +468,179 @@ task.spawn(function()
             end)
         end
         task.wait()
+    end
+end)
+
+local skillSelect = createDropdown("Select Skill", {
+    "1","2","3","4","5","6","7","8"
+}, 360)
+
+task.spawn(function()
+    while true do
+        selectedSkill = tonumber(skillSelect())
+        task.wait(0.1)
+    end
+end)
+
+--// RGB CYCLE WITH DRAGGABLE SPEED SLIDER
+local sliderContainer = Instance.new("Frame")
+sliderContainer.Parent = frame
+sliderContainer.Size = UDim2.new(0, 200, 0, 30)
+sliderContainer.Position = UDim2.new(0, 20, 1, -40)
+sliderContainer.BackgroundTransparency = 1
+
+-- Variables
+local dragging = false
+local speed = 0.5 -- default
+
+-- Drag function
+handle.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+    end
+end)
+handle.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local rel = math.clamp((input.Position.X - sliderBar.AbsolutePosition.X) / sliderBar.AbsoluteSize.X, 0, 1)
+        handle.Position = UDim2.new(rel, -6, 0, 0)
+        speed = rel * 5 -- max speed 5
+        sliderLabel.Text = string.format("Cycle Speed: %.2f", speed)
+    end
+end)
+
+-- RGB Cycle
+task.spawn(function()
+    local hue = 0
+    while true do
+        hue = (hue + 0.001 * speed*60) % 1
+        local color = Color3.fromHSV(hue, 0.7, 0.7)
+        frame.BackgroundColor3 = color
+        for _, child in ipairs(frame:GetChildren()) do
+            if child:IsA("TextButton") and not (child.BackgroundColor3 == Color3.fromRGB(50,150,50) or child.BackgroundColor3 == Color3.fromRGB(150,50,50)) then
+                child.BackgroundColor3 = color
+            end
+        end
+        task.wait(0.03)
+    end
+end)
+
+--// TOGGLES
+local combatEnabled = createToggle("Auto Combat", 50)
+local prestigeEnabled = createToggle("Auto Prestige", 90)
+local raidEnabled = createToggle("Auto Raid", 130)
+local evolveEnabled = createToggle("Auto Evolve", 170)
+local skipEnabled = createToggle("Auto Skip Turn", 210)
+local dungeonEnabled = createToggle("Auto Dungeon", 250)
+local modeToggle = createToggle("Use Single Skill", 320)
+
+local raidSelection = createDropdown("Select Raid", {
+    "Direwolf Pack Attack",
+    "Kingdom of Falmuth Battle",
+    "Charybdis Descent",
+    "Hinata Sakaguchi Encounter",
+    "Scorch Dragon Velgrynd"
+}, 320)
+
+--// AUTO COMBAT
+local useMode = "cycle" -- "cycle" or "single"
+local selectedSkill = 1 -- used if mode = "single"
+
+local skillOrder = {8,7,6,5,4,3,2,1}
+local index = 1
+
+combatRemote.OnClientInvoke = function(...)
+    if combatEnabled() then
+        
+        if useMode == "cycle" then
+            local skill = skillOrder[index]
+            index += 1
+            if index > #skillOrder then index = 1 end
+            return skill
+
+        elseif useMode == "single" then
+            return selectedSkill
+        end
+
+    elseif skipEnabled() then
+        return "skipturn"
+    end
+
+    return "skipturn"
+end
+
+--// AUTO PRESTIGE
+task.spawn(function()
+    while true do
+        if prestigeEnabled() then
+            pcall(function()
+                prestigeRemote:InvokeServer()
+            end)
+        end
+        task.wait()
+    end
+end)
+
+--// AUTO RAID
+task.spawn(function()
+    while true do
+        if raidEnabled() then
+            pcall(function()
+                raidRemote:InvokeServer(raidSelection())
+            end)
+        end
+        task.wait(5)
+    end
+end)
+
+--//Mode toggle
+task.spawn(function()
+    while true do
+        if modeToggle() then
+            useMode = "single"
+        else
+            useMode = "cycle"
+        end
+        task.wait(0.1)
+    end
+end)
+
+--// AUTO Dungeon
+task.spawn(function()
+    while true do
+        if dungeonEnabled() then
+            pcall(function()
+                dungeonRemote:InvokeServer()
+            end)
+        end
+        task.wait(3)
+    end
+end)
+
+--// AUTO EVOLVE
+task.spawn(function()
+    while true do
+        if evolveEnabled() then
+            pcall(function()
+                evolveRemote:FireServer()
+            end)
+        end
+        task.wait()
+    end
+end)
+
+local skillSelect = createDropdown("Select Skill", {
+    "1","2","3","4","5","6","7","8"
+}, 360)
+
+task.spawn(function()
+    while true do
+        selectedSkill = tonumber(skillSelect())
+        task.wait(0.1)
     end
 end)
 
