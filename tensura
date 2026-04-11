@@ -432,26 +432,48 @@ local races = {
 }
 local raceDropdown = createDropdown("Auto Race Target", races, 136, playerTab)
 
--- The actual auto-race task
-local ROLL_DELAY = 0.01
+-- Auto-race: Core-idea fix to only roll when the target race is NOT matched,
+-- and instantly stop when got the correct race and do not roll again unless toggled off/on or user picks new race.
+local ROLL_DELAY = 0.001 -- very short delay, tweak as desired
+
+local lastTargetRace = nil
+local awaitingTargetAchieved = false  -- Prevents rolling off desired race
+
 task.spawn(function()
     while true do
         if autoRaceEnabled() then
             local TARGET_RACE = raceDropdown()
-            local rolling = true
-            while autoRaceEnabled() and rolling do
-                local success, result = pcall(function()
-                    return rollRaceRemote:InvokeServer()
-                end)
-                if success then
-                    local currentRace = raceValue.Value
-                    if currentRace == TARGET_RACE then
-                        rolling = false
-                        break
-                    end
-                end
-                task.wait(ROLL_DELAY)
+            -- Reset when changing target or toggling on
+            if lastTargetRace ~= TARGET_RACE or not awaitingTargetAchieved then
+                lastTargetRace = TARGET_RACE
+                awaitingTargetAchieved = true
             end
+
+            -- Only roll if we do NOT have the target
+            if tostring(raceValue.Value) ~= tostring(TARGET_RACE) and awaitingTargetAchieved then
+                print("Starting auto-roll for:", TARGET_RACE)
+                while autoRaceEnabled() and tostring(raceValue.Value) ~= tostring(TARGET_RACE) and lastTargetRace == TARGET_RACE and awaitingTargetAchieved do
+                    local success, result = pcall(function()
+                        return rollRaceRemote:InvokeServer()
+                    end)
+                    if success then
+                        print("Rolled:", raceValue.Value)
+                        -- After roll, check again in next loop
+                    else
+                        warn("Roll failed:", result)
+                    end
+                    task.wait(ROLL_DELAY)
+                end
+                -- If we achieved the target, lock until disabled/re-enabled or race target is changed
+                if tostring(raceValue.Value) == tostring(TARGET_RACE) then
+                    print("🎉 Target race found:", TARGET_RACE)
+                    awaitingTargetAchieved = false
+                end
+            end
+        else
+            -- Reset state when toggle goes off so user can roll again next time
+            awaitingTargetAchieved = false
+            lastTargetRace = nil
         end
         task.wait(0.1)
     end
