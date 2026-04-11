@@ -19,6 +19,30 @@ local rollRaceRemote = ReplicatedStorage.Remotes:WaitForChild("rollRace")
 local player = Players.LocalPlayer
 local raceValue = player:WaitForChild("Data"):WaitForChild("race")
 
+--=== EP Relevant Values for Auto Evolve ===--
+local function getCurrentEP()
+    local success, ep = pcall(function()
+        return player:FindFirstChild("Data") and player.Data:FindFirstChild("ep") and player.Data.ep.Value or nil
+    end)
+    return success and ep or nil
+end
+
+local function getNeededEP()
+    local gui = player:FindFirstChild("PlayerGui")
+    if not gui then return nil end
+    local mainGui = gui:FindFirstChild("MainGui")
+    if not mainGui then return nil end
+    local handler = mainGui:FindFirstChild("mainHandler")
+    if not handler then return nil end
+    local neededEP = handler:FindFirstChild("neededEP")
+    if not neededEP then return nil end
+    local val = neededEP.Value
+    if typeof(val) == "string" then
+        val = tonumber(val)
+    end
+    return val
+end
+
 --// Main GRADIENT PRESETS
 local gradientPresets = {
     ["Dark Blue"] = {
@@ -57,31 +81,28 @@ frame.BorderSizePixel = 0
 frame.Active = true
 frame.ClipsDescendants = false
 frame.Name = "AutoGUI"
-frame.BackgroundTransparency = 1 -- start invisible for fade
+frame.BackgroundTransparency = 1
 
 local corner = Instance.new("UICorner")
 corner.CornerRadius = UDim.new(0, 18)
 corner.Parent = frame
 
 --// ANIMATED LIGHT GRADIENT BORDER
--- Create a frame behind the main GUI to serve as the border "layer"
 local borderThickness = 4
 local borderFrame = Instance.new("Frame")
 borderFrame.Name = "AnimatedBorder"
-borderFrame.Parent = frame.Parent -- same parent as main frame for layer order
+borderFrame.Parent = frame.Parent
 borderFrame.Size = frame.Size + UDim2.new(0, borderThickness*2, 0, borderThickness*2)
 borderFrame.Position = frame.Position - UDim2.new(0, borderThickness, 0, borderThickness)
-borderFrame.BackgroundTransparency = 1 -- border itself is transparent, only see the gradient
+borderFrame.BackgroundTransparency = 1
 borderFrame.ZIndex = frame.ZIndex or 1
 borderFrame.Active = false
 borderFrame.ClipsDescendants = true
 
--- Border rounding
 local borderCorner = Instance.new("UICorner")
 borderCorner.CornerRadius = UDim.new(0, 18 + borderThickness)
 borderCorner.Parent = borderFrame
 
--- Glowing animated border using a UIStroke with a UIGradient (glow color = white + gradient)
 local borderStroke = Instance.new("UIStroke")
 borderStroke.Thickness = borderThickness
 borderStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
@@ -89,7 +110,6 @@ borderStroke.Color = Color3.fromRGB(255,255,255)
 borderStroke.Transparency = 0.5
 borderStroke.Parent = borderFrame
 
--- We will update this UIGradient's Color according to preset, and animate the offset for moving colors
 local function createAnimatedBorderGradient(presetName)
     local preset = gradientPresets[presetName] or gradientPresets["Mono"]
     local keypoints = {}
@@ -106,17 +126,14 @@ end
 
 local borderGradient = createAnimatedBorderGradient("Mono")
 
--- Auto-update border size and position with gui drag/resize
 local function syncBorderToFrame()
     borderFrame.Size = frame.Size + UDim2.new(0, borderThickness*2, 0, borderThickness*2)
     borderFrame.Position = frame.Position - UDim2.new(0, borderThickness, 0, borderThickness)
 end
 
--- Whenever the frame is resized or moved
 frame:GetPropertyChangedSignal("Size"):Connect(syncBorderToFrame)
 frame:GetPropertyChangedSignal("Position"):Connect(syncBorderToFrame)
 
--- Shared main UI gradients
 local function createGradientFromPreset(presetName)
     local preset = gradientPresets[presetName] or gradientPresets["Mono"]
     local keypoints = {}
@@ -195,10 +212,8 @@ UIS.InputChanged:Connect(function(input)
     end
 end)
 
--- Keep border in sync with frame when dragging
 frame:GetPropertyChangedSignal("Position"):Connect(syncBorderToFrame)
 
--- Left Tabs Panel with gradient
 local tabPanel = Instance.new("Frame")
 tabPanel.Name = "TabPanel"
 tabPanel.Parent = frame
@@ -213,13 +228,11 @@ tabCorner.CornerRadius = UDim.new(0, 18)
 local tabGradient = createGradientFromPreset(selectedGradientPreset)
 tabGradient.Parent = tabPanel
 
--- TABS (remove Evolve tab from UI)
 local tabs = { "Combat", "Player", "Raids", "Dungeon", "Settings" }
 local tabButtons = {}
 local tabContainers = {}
 local selectedTab = "Combat"
 
--- Each tab gets a container frame for its content
 local function createTabContent(name)
     local container = Instance.new("Frame")
     container.Name = "Content_" .. name
@@ -270,16 +283,11 @@ for i, tabName in ipairs(tabs) do
     table.insert(tabButtons, button)
 end
 
--- Allow color gradient preset changing for all UI gradients and border
 local function setGUIGradientPreset(newPreset)
     selectedGradientPreset = newPreset
-    -- main background
     mainGradient.Color = createGradientFromPreset(newPreset).Color
-    -- header
     topGradient.Color = createGradientFromPreset(newPreset).Color
-    -- tab panel
     tabGradient.Color = createGradientFromPreset(newPreset).Color
-    -- border
     local preset = gradientPresets[newPreset] or gradientPresets["Mono"]
     local keypoints = {}
     for _, data in ipairs(preset) do
@@ -288,7 +296,6 @@ local function setGUIGradientPreset(newPreset)
     borderGradient.Color = ColorSequence.new(keypoints)
 end
 
---// HELPER FUNCTIONS (all corners rounded)
 local function createToggle(name, yPos, parent)
     local toggle = Instance.new("TextButton")
     toggle.Parent = parent
@@ -334,7 +341,6 @@ local function createDropdown(name, options, yPos, parent)
     local selected = options[1]
     local open = false
 
-    -- Container for dropdown list
     local container = Instance.new("Frame")
     container.Parent = parent
     container.Size = UDim2.new(0, 260, 0, math.min(#options * 25, 150))
@@ -421,7 +427,7 @@ local skillSelect = createDropdown("Select Skill", {
     "1","2","3","4","5","6","7","8"
 }, 136, combatTab)
 
--- PLAYER TAB (Auto Prestige, Auto Evolve, Auto Race)
+-- PLAYER TAB
 local playerTab = tabContainers["Player"]
 local prestigeEnabled = createToggle("Auto Prestige", 10, playerTab)
 local evolveEnabled = createToggle("Auto Evolve", 52, playerTab)
@@ -432,24 +438,20 @@ local races = {
 }
 local raceDropdown = createDropdown("Auto Race Target", races, 136, playerTab)
 
--- Auto-race: Core-idea fix to only roll when the target race is NOT matched,
--- and instantly stop when got the correct race and do not roll again unless toggled off/on or user picks new race.
-local ROLL_DELAY = 0.001 -- very short delay, tweak as desired
+local ROLL_DELAY = 0.001
 
 local lastTargetRace = nil
-local awaitingTargetAchieved = false  -- Prevents rolling off desired race
+local awaitingTargetAchieved = false
 
 task.spawn(function()
     while true do
         if autoRaceEnabled() then
             local TARGET_RACE = raceDropdown()
-            -- Reset when changing target or toggling on
             if lastTargetRace ~= TARGET_RACE or not awaitingTargetAchieved then
                 lastTargetRace = TARGET_RACE
                 awaitingTargetAchieved = true
             end
 
-            -- Only roll if we do NOT have the target
             if tostring(raceValue.Value) ~= tostring(TARGET_RACE) and awaitingTargetAchieved then
                 print("Starting auto-roll for:", TARGET_RACE)
                 while autoRaceEnabled() and tostring(raceValue.Value) ~= tostring(TARGET_RACE) and lastTargetRace == TARGET_RACE and awaitingTargetAchieved do
@@ -458,20 +460,17 @@ task.spawn(function()
                     end)
                     if success then
                         print("Rolled:", raceValue.Value)
-                        -- After roll, check again in next loop
                     else
                         warn("Roll failed:", result)
                     end
                     task.wait(ROLL_DELAY)
                 end
-                -- If we achieved the target, lock until disabled/re-enabled or race target is changed
                 if tostring(raceValue.Value) == tostring(TARGET_RACE) then
                     print("🎉 Target race found:", TARGET_RACE)
                     awaitingTargetAchieved = false
                 end
             end
         else
-            -- Reset state when toggle goes off so user can roll again next time
             awaitingTargetAchieved = false
             lastTargetRace = nil
         end
@@ -495,7 +494,6 @@ local raidSelection = createDropdown("Select Raid", {
 
 local dungeonEnabled = createToggle("Auto Dungeon", 10, dungeonTab)
 
--- SETTINGS TAB: Color Gradient Dropdown
 local colorPresetsList = {}
 for name, _ in pairs(gradientPresets) do
     table.insert(colorPresetsList, name)
@@ -503,7 +501,6 @@ end
 
 local colorDropdown = createDropdown("Color", colorPresetsList, 10, settingsTab)
 
--- Anti-AFK Toggle (in Settings)
 local antiAFKEnabled, antiAFKToggle = createToggle("Anti-AFK", 52, settingsTab)
 local antiAFKConnection
 
@@ -519,13 +516,11 @@ task.spawn(function()
     end
 end)
 
--- Anti-AFK connection handler logic
 task.spawn(function()
     local wasEnabled = false
     while true do
         local enabled = antiAFKEnabled()
         if enabled and not wasEnabled then
-            -- Connect only once per enable
             if antiAFKConnection then
                 antiAFKConnection:Disconnect()
                 antiAFKConnection = nil
@@ -537,7 +532,6 @@ task.spawn(function()
             end)
             wasEnabled = true
         elseif not enabled and wasEnabled then
-            -- Disconnect if disabling
             if antiAFKConnection then
                 antiAFKConnection:Disconnect()
                 antiAFKConnection = nil
@@ -555,6 +549,7 @@ local selectedSkill = 1
 local skillOrder = {8,7,6,5,4,3,2,1}
 local index = 1
 
+-- REWRITE: Only skip turn if skipEnabled is ON, otherwise do nothing ("skipturn" forcibly was always active before!)
 combatRemote.OnClientInvoke = function(...)
     if combatEnabled() then
         if useMode == "cycle" then
@@ -566,9 +561,14 @@ combatRemote.OnClientInvoke = function(...)
             return selectedSkill
         end
     elseif skipEnabled() then
+
         return "skipturn"
+    else
+        -- Do nothing if neither enabled: 
+        -- Returning nil (or maybe an empty string) so that the game does not forcibly skip turn when both are OFF.
+        -- If you must return something, choose nil or "":
+        return nil
     end
-    return "skipturn"
 end
 
 task.spawn(function()
@@ -582,11 +582,18 @@ task.spawn(function()
     end
 end)
 task.spawn(function()
+    --=== AUTO EVOLVE: Only fire if EP > neededEP ===--
     while true do
         if evolveEnabled() then
-            pcall(function()
-                evolveRemote:FireServer()
-            end)
+            local curEP = getCurrentEP()
+            local needEP = getNeededEP()
+            if curEP and needEP and type(curEP) == "number" and type(needEP) == "number" then
+                if curEP > needEP then
+                    pcall(function()
+                        evolveRemote:FireServer()
+                    end)
+                end
+            end
         end
         task.wait()
     end
@@ -628,16 +635,15 @@ task.spawn(function()
     end
 end)
 
--- Fade in Animation for main frame (on script load) - SLOWER and covers border as well
 task.spawn(function()
     local tr = 1
-    local fadeStep = 0.012 -- slower fade (was 0.04)
+    local fadeStep = 0.012
     while tr > 0 do
         tr = math.max(0, tr - fadeStep)
         frame.BackgroundTransparency = tr
         topBar.BackgroundTransparency = tr * 0.5
         tabPanel.BackgroundTransparency = tr * 0.5
-        borderStroke.Transparency = 0.5 + tr*0.5 -- border fades in too
+        borderStroke.Transparency = 0.5 + tr*0.5
         task.wait(0.03)
     end
     frame.BackgroundTransparency = 0
@@ -646,14 +652,11 @@ task.spawn(function()
     borderStroke.Transparency = 0.5
 end)
 
--- Border color animation loop (moves the gradient's offset, smoothly animating around border)
 task.spawn(function()
     local t = 0
     while true do
         t += 0.015
-        -- Animate offset to make colors move!
         borderGradient.Offset = Vector2.new(math.sin(t)*0.35, math.cos(t*0.73)*0.35)
-        -- Simulate a glowing effect by slightly modulating the thickness/transparency for a soft pulse
         borderStroke.Transparency = 0.35 + math.abs(math.sin(t*1.1))*0.16
         task.wait(0.025)
     end
