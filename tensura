@@ -3,6 +3,9 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 
+--// Anti-AFK service
+local VirtualUser = game:GetService("VirtualUser")
+
 --// REMOTES
 local combatRemote = ReplicatedStorage.Remotes:WaitForChild("awaitCombat")
 local prestigeRemote = ReplicatedStorage.Remotes:WaitForChild("prestiged")
@@ -478,6 +481,10 @@ end
 
 local colorDropdown = createDropdown("Color", colorPresetsList, 10, settingsTab)
 
+-- Anti-AFK Toggle (in Settings)
+local antiAFKEnabled, antiAFKToggle = createToggle("Anti-AFK", 52, settingsTab)
+local antiAFKConnection
+
 task.spawn(function()
     local lastPreset = selectedGradientPreset
     while true do
@@ -487,6 +494,35 @@ task.spawn(function()
             lastPreset = preset
         end
         task.wait(0.1)
+    end
+end)
+
+-- Anti-AFK connection handler logic
+task.spawn(function()
+    local wasEnabled = false
+    while true do
+        local enabled = antiAFKEnabled()
+        if enabled and not wasEnabled then
+            -- Connect only once per enable
+            if antiAFKConnection then
+                antiAFKConnection:Disconnect()
+                antiAFKConnection = nil
+            end
+            antiAFKConnection = player.Idled:Connect(function()
+                VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera and workspace.CurrentCamera.CFrame or CFrame.new())
+                wait(1)
+                VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera and workspace.CurrentCamera.CFrame or CFrame.new())
+            end)
+            wasEnabled = true
+        elseif not enabled and wasEnabled then
+            -- Disconnect if disabling
+            if antiAFKConnection then
+                antiAFKConnection:Disconnect()
+                antiAFKConnection = nil
+            end
+            wasEnabled = false
+        end
+        task.wait(0.2)
     end
 end)
 
@@ -540,7 +576,7 @@ task.spawn(function()
                 raidRemote:InvokeServer(raidSelection())
             end)
         end
-        task.wait(5)
+        task.wait(2)
     end
 end)
 task.spawn(function()
