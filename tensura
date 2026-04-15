@@ -484,7 +484,7 @@ end)
 local spiritsTab = tabContainers["Spirits"]
 
 -- These spirit names should match what can be rolled in your game's spirit system
-local spiritNames = {"Lesser Dark", "Lesser Water", "Greater Water", "Greater Dark", "Greater Earth", "Greater Fire", "Greater Holy", "NONE"}
+local spiritNames = {"Lesser Dark", "Lesser Water", "Greater Water", "Greater Dark", "Medium Earth", "Greater Fire", "Greater Holy", "NONE"}
 local spiritSlots = {"1", "2", "3", "4"}
 
 -- UI Elements for Spirit rolling
