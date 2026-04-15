@@ -14,6 +14,7 @@ local evolveRemote = ReplicatedStorage.Remotes:WaitForChild("evolve")
 local skipRemote = combatRemote
 local dungeonRemote = ReplicatedStorage.Remotes:WaitForChild("enterDungeon")
 local rollRaceRemote = ReplicatedStorage.Remotes:WaitForChild("rollRace")
+local rollSpiritRemote = ReplicatedStorage.Remotes:WaitForChild("rollSpirit")
 
 --// Player race Value
 local player = Players.LocalPlayer
@@ -228,7 +229,8 @@ tabCorner.CornerRadius = UDim.new(0, 18)
 local tabGradient = createGradientFromPreset(selectedGradientPreset)
 tabGradient.Parent = tabPanel
 
-local tabs = { "Combat", "Player", "Raids", "Dungeon", "Settings" }
+-- Move Spirits above Settings tab
+local tabs = { "Combat", "Player", "Raids", "Dungeon", "Spirits", "Settings" }
 local tabButtons = {}
 local tabContainers = {}
 local selectedTab = "Combat"
@@ -475,6 +477,95 @@ task.spawn(function()
             lastTargetRace = nil
         end
         task.wait(0.1)
+    end
+end)
+
+-- SPIRITS TAB (Auto-Roll Spirit Feature)
+local spiritsTab = tabContainers["Spirits"]
+
+-- These spirit names should match what can be rolled in your game's spirit system
+local spiritNames = {"Lesser Dark", "Lesser Water", "Greater Water", "Greater Dark", "Greater Earth", "Greater Fire", "Greater Holy", "NONE"}
+local spiritSlots = {"1", "2", "3", "4"}
+
+-- UI Elements for Spirit rolling
+local autoSpiritRollEnabled, autoSpiritRollToggle = createToggle("Auto Roll Spirit", 10, spiritsTab)
+local spiritTargetDropdown = createDropdown("Target Spirit", spiritNames, 52, spiritsTab)
+local spiritSlotDropdown = createDropdown("Spirit Slot", spiritSlots, 94, spiritsTab)
+
+-- Track last attempted settings
+local lastSpiritTarget = nil
+local lastSpiritSlot = nil
+local awaitingSpiritTarget = false
+
+-- Helper to retrieve owned spirits if desired (for smarter stopping)
+-- This is a stub, adapt as needed to actually fetch from the player profile:
+local function getOwnedSpirits()
+    local data = player:FindFirstChild("Data")
+    if not data then return {} end
+    local spirits = data:FindFirstChild("spirits2")
+    if spirits and spirits.Value ~= "" then
+        local success, decoded = pcall(function() return game:GetService("HttpService"):JSONDecode(spirits.Value) end)
+        if success and type(decoded) == "table" then
+            return decoded
+        end
+    end
+    return {}
+end
+
+-- The rolling loop for spirits
+task.spawn(function()
+    while true do
+        if autoSpiritRollEnabled() then
+            local targetSpirit = spiritTargetDropdown()
+            local targetSlot = tonumber(spiritSlotDropdown())
+            -- Defensive: Don't roll in an invalid slot
+            if typeof(targetSlot) ~= "number" or targetSlot < 1 or targetSlot > 4 then
+                task.wait(0.2)
+                continue
+            end
+
+            local ownedSpirits = getOwnedSpirits()
+            local currentSpirit = ownedSpirits[targetSlot]
+
+            if lastSpiritTarget ~= targetSpirit or lastSpiritSlot ~= targetSlot or not awaitingSpiritTarget then
+                lastSpiritTarget = targetSpirit
+                lastSpiritSlot = targetSlot
+                awaitingSpiritTarget = true
+            end
+
+            -- Only roll if current spirit is not what we want and the setting is still valid
+            if currentSpirit ~= targetSpirit and awaitingSpiritTarget then
+                print(string.format("Starting auto-roll for spirit '%s' in slot %d", targetSpirit, targetSlot))
+                while autoSpiritRollEnabled() and spiritTargetDropdown() == targetSpirit and tostring(spiritSlotDropdown()) == tostring(targetSlot) and awaitingSpiritTarget do
+                    -- Recheck ownedSpirits each time
+                    ownedSpirits = getOwnedSpirits()
+                    currentSpirit = ownedSpirits[targetSlot]
+                    if currentSpirit == targetSpirit then
+                        print(string.format("🎉 Target spirit '%s' acquired in slot %d!", targetSpirit, targetSlot))
+                        awaitingSpiritTarget = false
+                        break
+                    end
+                    -- Try roll
+                    local success, result = pcall(function()
+                        return rollSpiritRemote:InvokeServer(targetSlot)
+                    end)
+                    if success then
+                        print("Spirit roll result for slot", targetSlot, ":", tostring(result))
+                    else
+                        warn("Spirit roll failed:", result)
+                    end
+                    task.wait(0.3)
+                end
+            elseif currentSpirit == targetSpirit then
+                awaitingSpiritTarget = false
+                -- already have, don't roll!
+            end
+        else
+            awaitingSpiritTarget = false
+            lastSpiritTarget = nil
+            lastSpiritSlot = nil
+        end
+        task.wait(0.15)
     end
 end)
 
