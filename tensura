@@ -423,7 +423,23 @@ end
 local combatTab = tabContainers["Combat"]
 local combatEnabled = createToggle("Auto Combat", 10, combatTab)
 local skipEnabled = createToggle("Auto Skip Turn", 52, combatTab)
-local modeToggle = createToggle("Use Single Skill", 94, combatTab)
+
+-- Remove existing "modeToggle"
+-- Add new Combat Type dropdown:
+local combatTypeOptions = {"Cycle", "Single", "Prefer Skill"}
+local function getYForNextCombatControl()
+    -- Find the largest Y
+    local ys = {10, 52}
+    for _, child in ipairs(combatTab:GetChildren()) do
+        if child:IsA("GuiObject") then
+            table.insert(ys, child.Position and child.Position.Y.Offset or 0)
+        end
+    end
+    local maxY = 0
+    for _, y in ipairs(ys) do if y > maxY then maxY = y end end
+    return maxY + 42
+end
+local combatTypeDropdown = createDropdown("Combat Type", combatTypeOptions, 94, combatTab)
 
 local skillSelect = createDropdown("Select Skill", {
     "1","2","3","4","5","6","7","8"
@@ -484,7 +500,7 @@ end)
 local spiritsTab = tabContainers["Spirits"]
 
 -- These spirit names should match what can be rolled in your game's spirit system
-local spiritNames = {"Lesser Dark", "Lesser Water", "Greater Water", "Greater Dark", "Medium Earth", "Greater Fire", "Greater Holy", "NONE"}
+local spiritNames = {"Lesser Dark", "Lesser Water", "Greater Water", "Greater Dark", "Greater Earth", "Greater Fire", "Greater Holy", "NONE"}
 local spiritSlots = {"1", "2", "3", "4"}
 
 -- UI Elements for Spirit rolling
@@ -635,32 +651,88 @@ end)
 
 --// REMOTE BINDINGS and TOGGLE MODES
 
-local useMode = "cycle"
+local combatType = "Cycle" -- "Cycle", "Single", "Prefer Skill"
 local selectedSkill = 1
 local skillOrder = {8,7,6,5,4,3,2,1}
 local index = 1
 
--- REWRITE: Only skip turn if skipEnabled is ON, otherwise do nothing ("skipturn" forcibly was always active before!)
+local preferredSkillTryPreferred = true
+local preferSkillState = {
+    step = 1, -- steps: 1=prefer, 2=cycle, then back to 1
+    cycleIndex = 1 -- for cycling after failed preferred skill
+}
+
 combatRemote.OnClientInvoke = function(...)
     if combatEnabled() then
-        if useMode == "cycle" then
+        combatType = combatTypeDropdown()
+        selectedSkill = tonumber(skillSelect())
+        if combatType == "Cycle" then
             local skill = skillOrder[index]
-            index += 1
+            index = index + 1
             if index > #skillOrder then index = 1 end
             return skill
-        elseif useMode == "single" then
+        elseif combatType == "Single" then
             return selectedSkill
+        elseif combatType == "Prefer Skill" then
+            -- preferSkillState contains step (1 or 2) and cycleIndex
+            -- Step 1: try preferred, Step 2: try cycle, repeat
+
+            -- Step 1: Try preferred
+            if preferSkillState.step == 1 then
+                preferSkillState.lastTried = "preferred"
+                preferSkillState.step = 2
+                return selectedSkill
+            else
+                -- Step 2: Try cycle
+                local skill = skillOrder[preferSkillState.cycleIndex]
+                -- Don't use preferred skill in cycle
+                if skill == selectedSkill then
+                    -- skip preferred if we land there in the cycle
+                    preferSkillState.cycleIndex = preferSkillState.cycleIndex + 1
+                    if preferSkillState.cycleIndex > #skillOrder then
+                        preferSkillState.cycleIndex = 1
+                    end
+                    skill = skillOrder[preferSkillState.cycleIndex]
+                end
+                -- Advance for next
+                preferSkillState.cycleIndex = preferSkillState.cycleIndex + 1
+                if preferSkillState.cycleIndex > #skillOrder then
+                    preferSkillState.cycleIndex = 1
+                end
+                preferSkillState.lastTried = "cycle"
+                preferSkillState.step = 1
+                return skill
+            end
         end
     elseif skipEnabled() then
-
         return "skipturn"
     else
-        -- Do nothing if neither enabled: 
-        -- Returning nil (or maybe an empty string) so that the game does not forcibly skip turn when both are OFF.
-        -- If you must return something, choose nil or "":
         return nil
     end
 end
+
+-- Reset preferSkillState if combatType changes, combat toggled, or preferred skill changes
+task.spawn(function()
+    local lastCombatType, lastEnabled, lastSkill
+    while true do
+        local curType = combatTypeDropdown()
+        local enabled = combatEnabled()
+        local skill = tonumber(skillSelect())
+        if curType ~= lastCombatType or enabled ~= lastEnabled or skill ~= lastSkill then
+            -- Reset prefer skill state
+            preferSkillState.step = 1
+            preferSkillState.cycleIndex = 1
+            lastCombatType = curType
+            lastEnabled = enabled
+            lastSkill = skill
+        end
+        -- Keep regular index for cycle type in sync
+        if curType ~= "Cycle" then
+            index = 1
+        end
+        task.wait(0.05)
+    end
+end)
 
 task.spawn(function()
     while true do
@@ -709,22 +781,8 @@ task.spawn(function()
         task.wait(3)
     end
 end)
-task.spawn(function()
-    while true do
-        if modeToggle() then
-            useMode = "single"
-        else
-            useMode = "cycle"
-        end
-        task.wait(0.1)
-    end
-end)
-task.spawn(function()
-    while true do
-        selectedSkill = tonumber(skillSelect())
-        task.wait(0.1)
-    end
-end)
+
+-- Remove old modeToggle/skillSelect update loops -- combatTypeDropdown and skillSelect handle that now
 
 task.spawn(function()
     local tr = 1
