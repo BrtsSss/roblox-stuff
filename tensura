@@ -20,6 +20,15 @@ local rollSpiritRemote = ReplicatedStorage.Remotes:WaitForChild("rollSpirit")
 local player = Players.LocalPlayer
 local raceValue = player:WaitForChild("Data"):WaitForChild("race")
 
+-- Animated color helper
+local function lerpColor3(a, b, t)
+    return Color3.new(
+        a.R + (b.R - a.R) * t,
+        a.G + (b.G - a.G) * t,
+        a.B + (b.B - a.B) * t
+    )
+end
+
 --=== EP Relevant Values for Auto Evolve ===--
 local function getCurrentEP()
     local success, ep = pcall(function()
@@ -45,6 +54,7 @@ local function getNeededEP()
 end
 
 --// Main GRADIENT PRESETS
+-- (no change here)
 local gradientPresets = {
     ["Dark Blue"] = {
         {0, Color3.fromRGB(40, 60, 100)},
@@ -135,7 +145,8 @@ end
 frame:GetPropertyChangedSignal("Size"):Connect(syncBorderToFrame)
 frame:GetPropertyChangedSignal("Position"):Connect(syncBorderToFrame)
 
-local function createGradientFromPreset(presetName)
+-- Return UIGradient AND its preset keypoints (so we can animate colors)
+local function createAnimatedGradientFromPreset(presetName, rotation)
     local preset = gradientPresets[presetName] or gradientPresets["Mono"]
     local keypoints = {}
     for _, data in ipairs(preset) do
@@ -143,12 +154,12 @@ local function createGradientFromPreset(presetName)
     end
     local grad = Instance.new("UIGradient")
     grad.Color = ColorSequence.new(keypoints)
-    grad.Rotation = 45
-    return grad
+    grad.Rotation = rotation or 45
+    return grad, preset
 end
 
 local selectedGradientPreset = "Mono"
-local mainGradient = createGradientFromPreset(selectedGradientPreset)
+local mainGradient, mainPreset = createAnimatedGradientFromPreset(selectedGradientPreset, 45)
 mainGradient.Parent = frame
 
 --// Top bar for dragging + gradient
@@ -163,7 +174,7 @@ topBar.Name = "TopBar"
 local topBarCorner = Instance.new("UICorner", topBar)
 topBarCorner.CornerRadius = UDim.new(0, 18)
 
-local topGradient = createGradientFromPreset(selectedGradientPreset)
+local topGradient, topPreset = createAnimatedGradientFromPreset(selectedGradientPreset, 45)
 topGradient.Parent = topBar
 
 local title = Instance.new("TextLabel")
@@ -226,7 +237,7 @@ tabPanel.BorderSizePixel = 0
 local tabCorner = Instance.new("UICorner", tabPanel)
 tabCorner.CornerRadius = UDim.new(0, 18)
 
-local tabGradient = createGradientFromPreset(selectedGradientPreset)
+local tabGradient, tabPreset = createAnimatedGradientFromPreset(selectedGradientPreset, 45)
 tabGradient.Parent = tabPanel
 
 -- Move Spirits above Settings tab
@@ -287,9 +298,15 @@ end
 
 local function setGUIGradientPreset(newPreset)
     selectedGradientPreset = newPreset
-    mainGradient.Color = createGradientFromPreset(newPreset).Color
-    topGradient.Color = createGradientFromPreset(newPreset).Color
-    tabGradient.Color = createGradientFromPreset(newPreset).Color
+    local newMain, newMainPreset = createAnimatedGradientFromPreset(newPreset, 45)
+    local newTop, newTopPreset = createAnimatedGradientFromPreset(newPreset, 45)
+    local newTab, newTabPreset = createAnimatedGradientFromPreset(newPreset, 45)
+    mainGradient.Color = newMain.Color
+    topGradient.Color = newTop.Color
+    tabGradient.Color = newTab.Color
+    mainPreset = gradientPresets[newPreset]
+    topPreset = gradientPresets[newPreset]
+    tabPreset = gradientPresets[newPreset]
     local preset = gradientPresets[newPreset] or gradientPresets["Mono"]
     local keypoints = {}
     for _, data in ipairs(preset) do
@@ -297,6 +314,8 @@ local function setGUIGradientPreset(newPreset)
     end
     borderGradient.Color = ColorSequence.new(keypoints)
 end
+
+-- (no change in createToggle, createDropdown etc.)
 
 local function createToggle(name, yPos, parent)
     local toggle = Instance.new("TextButton")
@@ -419,16 +438,13 @@ local function createDropdown(name, options, yPos, parent)
 end
 
 --=== TAB CONTENTS ===--
--- COMBAT TAB
+-- (no change for content initialization, only gradients were changed above)
 local combatTab = tabContainers["Combat"]
 local combatEnabled = createToggle("Auto Combat", 10, combatTab)
 local skipEnabled = createToggle("Auto Skip Turn", 52, combatTab)
 
--- Remove existing "modeToggle"
--- Add new Combat Type dropdown:
 local combatTypeOptions = {"Cycle", "Single", "Prefer Skill"}
 local function getYForNextCombatControl()
-    -- Find the largest Y
     local ys = {10, 52}
     for _, child in ipairs(combatTab:GetChildren()) do
         if child:IsA("GuiObject") then
@@ -445,7 +461,6 @@ local skillSelect = createDropdown("Select Skill", {
     "1","2","3","4","5","6","7","8"
 }, 136, combatTab)
 
--- PLAYER TAB
 local playerTab = tabContainers["Player"]
 local prestigeEnabled = createToggle("Auto Prestige", 10, playerTab)
 local evolveEnabled = createToggle("Auto Evolve", 52, playerTab)
@@ -496,25 +511,17 @@ task.spawn(function()
     end
 end)
 
--- SPIRITS TAB (Auto-Roll Spirit Feature)
 local spiritsTab = tabContainers["Spirits"]
-
--- These spirit names should match what can be rolled in your game's spirit system
 local spiritNames = {"Lesser Dark", "Lesser Water", "Greater Water", "Greater Dark", "Greater Earth", "Greater Fire", "Greater Holy", "NONE"}
 local spiritSlots = {"1", "2", "3", "4"}
-
--- UI Elements for Spirit rolling
 local autoSpiritRollEnabled, autoSpiritRollToggle = createToggle("Auto Roll Spirit", 10, spiritsTab)
 local spiritTargetDropdown = createDropdown("Target Spirit", spiritNames, 52, spiritsTab)
 local spiritSlotDropdown = createDropdown("Spirit Slot", spiritSlots, 94, spiritsTab)
 
--- Track last attempted settings
 local lastSpiritTarget = nil
 local lastSpiritSlot = nil
 local awaitingSpiritTarget = false
 
--- Helper to retrieve owned spirits if desired (for smarter stopping)
--- This is a stub, adapt as needed to actually fetch from the player profile:
 local function getOwnedSpirits()
     local data = player:FindFirstChild("Data")
     if not data then return {} end
@@ -528,18 +535,15 @@ local function getOwnedSpirits()
     return {}
 end
 
--- The rolling loop for spirits
 task.spawn(function()
     while true do
         if autoSpiritRollEnabled() then
             local targetSpirit = spiritTargetDropdown()
             local targetSlot = tonumber(spiritSlotDropdown())
-            -- Defensive: Don't roll in an invalid slot
             if typeof(targetSlot) ~= "number" or targetSlot < 1 or targetSlot > 4 then
                 task.wait(0.2)
                 continue
             end
-
             local ownedSpirits = getOwnedSpirits()
             local currentSpirit = ownedSpirits[targetSlot]
 
@@ -549,11 +553,9 @@ task.spawn(function()
                 awaitingSpiritTarget = true
             end
 
-            -- Only roll if current spirit is not what we want and the setting is still valid
             if currentSpirit ~= targetSpirit and awaitingSpiritTarget then
                 print(string.format("Starting auto-roll for spirit '%s' in slot %d", targetSpirit, targetSlot))
                 while autoSpiritRollEnabled() and spiritTargetDropdown() == targetSpirit and tostring(spiritSlotDropdown()) == tostring(targetSlot) and awaitingSpiritTarget do
-                    -- Recheck ownedSpirits each time
                     ownedSpirits = getOwnedSpirits()
                     currentSpirit = ownedSpirits[targetSlot]
                     if currentSpirit == targetSpirit then
@@ -561,7 +563,6 @@ task.spawn(function()
                         awaitingSpiritTarget = false
                         break
                     end
-                    -- Try roll
                     local success, result = pcall(function()
                         return rollSpiritRemote:InvokeServer(targetSlot)
                     end)
@@ -574,7 +575,6 @@ task.spawn(function()
                 end
             elseif currentSpirit == targetSpirit then
                 awaitingSpiritTarget = false
-                -- already have, don't roll!
             end
         else
             awaitingSpiritTarget = false
@@ -585,7 +585,6 @@ task.spawn(function()
     end
 end)
 
--- RAID, DUNGEON, SETTINGS
 local raidTab = tabContainers["Raids"]
 local dungeonTab = tabContainers["Dungeon"]
 local settingsTab = tabContainers["Settings"]
@@ -598,16 +597,13 @@ local raidSelection = createDropdown("Select Raid", {
     "Hinata Sakaguchi Encounter",
     "Scorch Dragon Velgrynd"
 }, 52, raidTab)
-
 local dungeonEnabled = createToggle("Auto Dungeon", 10, dungeonTab)
 
 local colorPresetsList = {}
 for name, _ in pairs(gradientPresets) do
     table.insert(colorPresetsList, name)
 end
-
 local colorDropdown = createDropdown("Color", colorPresetsList, 10, settingsTab)
-
 local antiAFKEnabled, antiAFKToggle = createToggle("Anti-AFK", 52, settingsTab)
 local antiAFKConnection
 
@@ -649,18 +645,15 @@ task.spawn(function()
     end
 end)
 
---// REMOTE BINDINGS and TOGGLE MODES
+-- Everything else below is the same as before
 
-local combatType = "Cycle" -- "Cycle", "Single", "Prefer Skill"
+local combatType = "Cycle"
 local selectedSkill = 1
 local skillOrder = {8,7,6,5,4,3,2,1}
 local index = 1
 
 local preferredSkillTryPreferred = true
-local preferSkillState = {
-    step = 1, -- steps: 1=prefer, 2=cycle, then back to 1
-    cycleIndex = 1 -- for cycling after failed preferred skill
-}
+local preferSkillState = {step = 1, cycleIndex = 1}
 
 combatRemote.OnClientInvoke = function(...)
     if combatEnabled() then
@@ -674,27 +667,19 @@ combatRemote.OnClientInvoke = function(...)
         elseif combatType == "Single" then
             return selectedSkill
         elseif combatType == "Prefer Skill" then
-            -- preferSkillState contains step (1 or 2) and cycleIndex
-            -- Step 1: try preferred, Step 2: try cycle, repeat
-
-            -- Step 1: Try preferred
             if preferSkillState.step == 1 then
                 preferSkillState.lastTried = "preferred"
                 preferSkillState.step = 2
                 return selectedSkill
             else
-                -- Step 2: Try cycle
                 local skill = skillOrder[preferSkillState.cycleIndex]
-                -- Don't use preferred skill in cycle
                 if skill == selectedSkill then
-                    -- skip preferred if we land there in the cycle
                     preferSkillState.cycleIndex = preferSkillState.cycleIndex + 1
                     if preferSkillState.cycleIndex > #skillOrder then
                         preferSkillState.cycleIndex = 1
                     end
                     skill = skillOrder[preferSkillState.cycleIndex]
                 end
-                -- Advance for next
                 preferSkillState.cycleIndex = preferSkillState.cycleIndex + 1
                 if preferSkillState.cycleIndex > #skillOrder then
                     preferSkillState.cycleIndex = 1
@@ -711,7 +696,6 @@ combatRemote.OnClientInvoke = function(...)
     end
 end
 
--- Reset preferSkillState if combatType changes, combat toggled, or preferred skill changes
 task.spawn(function()
     local lastCombatType, lastEnabled, lastSkill
     while true do
@@ -719,14 +703,12 @@ task.spawn(function()
         local enabled = combatEnabled()
         local skill = tonumber(skillSelect())
         if curType ~= lastCombatType or enabled ~= lastEnabled or skill ~= lastSkill then
-            -- Reset prefer skill state
             preferSkillState.step = 1
             preferSkillState.cycleIndex = 1
             lastCombatType = curType
             lastEnabled = enabled
             lastSkill = skill
         end
-        -- Keep regular index for cycle type in sync
         if curType ~= "Cycle" then
             index = 1
         end
@@ -745,7 +727,6 @@ task.spawn(function()
     end
 end)
 task.spawn(function()
-    --=== AUTO EVOLVE: Only fire if EP > neededEP ===--
     while true do
         if evolveEnabled() then
             local curEP = getCurrentEP()
@@ -782,8 +763,6 @@ task.spawn(function()
     end
 end)
 
--- Remove old modeToggle/skillSelect update loops -- combatTypeDropdown and skillSelect handle that now
-
 task.spawn(function()
     local tr = 1
     local fadeStep = 0.012
@@ -801,10 +780,39 @@ task.spawn(function()
     borderStroke.Transparency = 0.5
 end)
 
+-- Animation loop for gradients!
 task.spawn(function()
     local t = 0
     while true do
         t += 0.015
+        -- Animate gradient colors in a subtle way for mainGradient/topGradient/tabGradient
+        local function shiftPresetColors(preset, speed, phase)
+            local keypoints = {}
+            for i, data in ipairs(preset) do
+                local p = (t*speed + (phase or 0) + i*0.8)%1
+                local offset = 0.08*math.sin(2*math.pi*p)
+                table.insert(keypoints, ColorSequenceKeypoint.new(
+                    data[1],
+                    lerpColor3(data[2], Color3.fromRGB(
+                        math.floor(data[2].R*255 + 18*offset),
+                        math.floor(data[2].G*255 + 18*offset),
+                        math.floor(data[2].B*255 + 18*offset)
+                    ), 0.5 + 0.5*math.sin(t*speed + i+phase))
+                ))
+            end
+            return ColorSequence.new(keypoints)
+        end
+
+        if mainGradient and mainPreset then
+            mainGradient.Color = shiftPresetColors(mainPreset, 0.5, 0)
+        end
+        if topGradient and topPreset then
+            topGradient.Color = shiftPresetColors(topPreset, 0.65, 0.2)
+        end
+        if tabGradient and tabPreset then
+            tabGradient.Color = shiftPresetColors(tabPreset, 0.8, 0.45)
+        end
+
         borderGradient.Offset = Vector2.new(math.sin(t)*0.35, math.cos(t*0.73)*0.35)
         borderStroke.Transparency = 0.35 + math.abs(math.sin(t*1.1))*0.16
         task.wait(0.025)
